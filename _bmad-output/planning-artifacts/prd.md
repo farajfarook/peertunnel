@@ -440,13 +440,13 @@ Minimum target: current stable versions of any Chromium-based browser and Safari
 - **FR13:** Viewer can see a "reconnecting..." indicator for interruptions longer than 3 seconds
 - **FR14:** Viewer can see a "tunnel closed by host" message when the host ends the session
 - **FR15:** Viewer can see a connection type indicator (direct P2P vs relayed)
-- **FR16:** Multiple viewers can connect to the same tunnel simultaneously
+- **FR16:** Up to 5 viewers (configurable via `--max-viewers`) can connect to the same tunnel simultaneously
 
 ### Viewer Welcome & Manual Connect
 
 - **FR17:** Visitor can see a welcome page with a brief description of peertunnel when accessing the viewer URL without a connection string
 - **FR18:** Visitor can manually enter a connection string (peer ID + token) and connect via an input field
-- **FR19:** Viewer auto-connects when the URL contains a connection string in the fragment
+- **FR19:** Viewer can auto-connect when the URL contains a connection string in the fragment
 
 ### P2P Networking
 
@@ -489,7 +489,7 @@ Minimum target: current stable versions of any Chromium-based browser and Safari
 
 ### Configuration
 
-- **FR44:** CLI can persist settings (telemetry ID, opt-in status) in a config file at `~/.peertunnel/config.yaml`
+- **FR44:** CLI can persist settings (telemetry ID, opt-in status) in a user-level config file
 - **FR45:** User can reset telemetry identity via a config subcommand
 - **FR46:** Host can configure maximum simultaneous viewer connections via `--max-viewers` flag (default 5)
 
