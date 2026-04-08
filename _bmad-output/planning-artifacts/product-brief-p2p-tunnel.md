@@ -1,18 +1,18 @@
 ---
-title: "Product Brief: p2p-tunnel"
+title: "Product Brief: peertunnel"
 status: "complete"
 created: "2026-04-08"
 updated: "2026-04-08"
 inputs: [user brain dump, web research — competitive landscape and libp2p ecosystem]
 ---
 
-# Product Brief: p2p-tunnel
+# Product Brief: peertunnel
 
 ## Executive Summary
 
 Every developer has faced the same friction: you're building something locally, and you need someone else to see it — a teammate, a client, a stakeholder. Today's answer is tunneling tools like ngrok, but they all route your traffic through someone else's servers, cap your bandwidth, expire your sessions, and require accounts you didn't want to create.
 
-**p2p-tunnel** is a decentralized localhost tunneling tool that cuts out the middleman. A Go CLI exposes any local HTTP port over a direct peer-to-peer connection using libp2p. A lightweight static web viewer — hosted at a public URL — connects to the CLI node from any browser, authenticates with a token, and renders the tunneled site live. Sharing is a single link. No account. No relay server. No bandwidth caps. No session limits.
+**peertunnel** is a decentralized localhost tunneling tool that cuts out the middleman. A Go CLI exposes any local HTTP port over a direct peer-to-peer connection using libp2p. A lightweight static web viewer — hosted at a public URL — connects to the CLI node from any browser, authenticates with a token, and renders the tunneled site live. Sharing is a single link. No account. No relay server. No bandwidth caps. No session limits.
 
 The timing is right: ngrok is alienating developers with its enterprise pivot, libp2p browser transports reached production maturity in 2025, and no existing tool combines P2P tunneling with a zero-install browser viewer.
 
@@ -29,10 +29,10 @@ The common thread: every existing solution either depends on a centralized relay
 
 ## The Solution
 
-p2p-tunnel is two components:
+peertunnel is two components:
 
 **CLI Tool (Go)**
-- Single binary, zero dependencies. Run `p2p-tunnel serve --port 3000` and you're live.
+- Single binary, zero dependencies. Run `peertunnel serve --port 3000` and you're live.
 - Exposes any local HTTP port over libp2p's peer-to-peer network.
 - Generates a shareable tunnel link — a URL to the hosted viewer with the peer ID and security token encoded in the fragment. One link to copy and share.
 - Connects directly to the viewer's browser via WebTransport or WebRTC-Direct. P2P first — relay only as a last resort for restrictive networks (similar to Tailscale's DERP approach).
@@ -49,11 +49,11 @@ p2p-tunnel is two components:
 
 **Zero-knowledge privacy by architecture.** Your traffic flows directly between your machine and the viewer's browser. It never touches a third-party server. This isn't a privacy policy — it's a structural guarantee. libp2p's Noise protocol encrypts all traffic end-to-end.
 
-**Sustainably free.** Every relay-based competitor faces an inexorable cost curve: more users means more server costs means aggressive monetization. ngrok's free tier has degraded every year since 2020. p2p-tunnel has no server bill that scales with usage. It will never need a degrading free tier because there's nothing to pay for.
+**Sustainably free.** Every relay-based competitor faces an inexorable cost curve: more users means more server costs means aggressive monetization. ngrok's free tier has degraded every year since 2020. peertunnel has no server bill that scales with usage. It will never need a degrading free tier because there's nothing to pay for.
 
 **Single-link sharing.** The CLI outputs a link like `https://<viewer-domain>/#<peer-id>.<token>`. Share it in Slack, email, or a Post-it. The receiver clicks it and sees your localhost. No special setup on their end.
 
-| | p2p-tunnel | ngrok | Cloudflare Tunnel | bore |
+| | peertunnel | ngrok | Cloudflare Tunnel | bore |
 |---|---|---|---|---|
 | Central server required | No | Yes | Yes | Yes |
 | Account required | No | Yes | Yes | No |
@@ -104,4 +104,4 @@ p2p-tunnel is two components:
 
 ## Vision
 
-p2p-tunnel starts as a simple, free, open-source tool that does one thing well: expose localhost over P2P with zero infrastructure. Where it goes from there will be shaped by the community and real-world usage. The foundation — libp2p networking, browser-native P2P, zero-server architecture — is designed to support whatever comes next.
+peertunnel starts as a simple, free, open-source tool that does one thing well: expose localhost over P2P with zero infrastructure. Where it goes from there will be shaped by the community and real-world usage. The foundation — libp2p networking, browser-native P2P, zero-server architecture — is designed to support whatever comes next.
