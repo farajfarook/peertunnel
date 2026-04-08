@@ -1,5 +1,5 @@
 ---
-stepsCompleted: [1, 2]
+stepsCompleted: [1, 2, 3]
 inputDocuments: ['prd.md', 'prd-validation-report.md', 'product-brief-p2p-tunnel.md']
 workflowType: 'architecture'
 project_name: 'peertunnel'
@@ -59,3 +59,90 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 - **Reconnection state machine** — both CLI and viewer need coordinated reconnection logic with the <3s silent / >3s visible threshold
 - **Protocol framing** — HTTP request/response serialization over libp2p streams must handle headers, bodies, chunked transfer, and WebSocket upgrade consistently
 - **Dual proxy mechanism** — Service Worker handles HTTP traffic; WebSocket shim handles WebSocket traffic. Both route through the same libp2p connection but use different interception strategies. The architecture must ensure these two mechanisms don't conflict and share connection state cleanly.
+
+## Starter Template Evaluation
+
+### Primary Technology Domain
+
+Two-component monorepo: Go CLI tool + static TypeScript web application. Technology choices are PRD-specified (Go + Lit/TypeScript/Vite), so starter evaluation focuses on scaffolding tools, not technology selection.
+
+### Starter Options Considered
+
+**Go CLI:**
+- **cobra-cli** (v1.3.0, Cobra library v1.9.x) — standard Go CLI scaffolding. Generates `main.go` + `cmd/` subcommand files. Used by kubectl, gh, hugo. Minimal scaffold — project layout (`internal/`, etc.) built manually.
+- **Manual setup** (`go mod init` + cobra as library dependency) — equivalent outcome, slightly more control over initial structure.
+
+**Web Viewer:**
+- **Vite lit-ts template** (Lit 3.3.x, Vite 9.x) — official Vite template for Lit + TypeScript. Generates `index.html`, sample component, `tsconfig.json`, `vite.config.ts`. Minimal — no testing, linting, or routing.
+- **Open WC generator** — more opinionated (testing, linting, Storybook). Heavier than needed for a thin viewer shell.
+
+### Selected Starters
+
+**Go CLI: cobra-cli + conventional Go layout**
+
+**Rationale:** Cobra handles subcommand routing (`serve`, `relay`, `config`, `version`), flag parsing, help generation, and future shell completion. The conventional Go project layout (`internal/`, `cmd/`) provides clear separation. Minimal scaffolding matches a greenfield project where most code is custom (libp2p networking, tunnel logic).
+
+**Web Viewer: Vite lit-ts template**
+
+**Rationale:** Official, actively maintained, minimal footprint. The viewer is a thin shell around tunneled content — no routing framework, no state management library, no component library needed. Lit's Web Components approach keeps the viewer lightweight with minimal dependencies.
+
+### Initialization Commands
+
+```bash
+# Go CLI (from project root)
+mkdir -p cli && cd cli
+go mod init github.com/farajfarook/peertunnel
+go install github.com/spf13/cobra-cli@latest
+cobra-cli init
+cobra-cli add serve
+cobra-cli add relay
+cobra-cli add config
+
+# Web Viewer (from project root)
+npm create vite@latest viewer -- --template lit-ts
+```
+
+### Architectural Decisions Provided by Starters
+
+**Language & Runtime:**
+- Go (latest stable) for CLI — single static binary, cross-compilation via GOOS/GOARCH
+- TypeScript (strict mode) for viewer — Vite handles transpilation and bundling
+
+**Build Tooling:**
+- Go: `go build` produces static binary. Cross-platform builds via `GOOS=linux/darwin/windows GOARCH=amd64/arm64`
+- Viewer: Vite dev server for development, `vite build` for production static output
+
+**Code Organization:**
+- CLI: `cmd/` (Cobra subcommands) + `internal/` (tunnel, relay, p2p, config packages)
+- Viewer: `src/` (Lit components, p2p connection, proxy layer)
+
+**Development Experience:**
+- Go: standard `go run`, `go test`, `go vet`
+- Viewer: Vite HMR dev server, TypeScript type checking
+
+### Monorepo Structure
+
+```
+peertunnel/
+├── cli/                    # Go CLI
+│   ├── cmd/                # Cobra subcommands (serve, relay, config)
+│   ├── internal/
+│   │   ├── tunnel/         # Tunnel hosting logic
+│   │   ├── relay/          # Relay mode logic
+│   │   ├── p2p/            # libp2p networking layer
+│   │   └── config/         # Config file management
+│   ├── go.mod
+│   └── main.go
+├── viewer/                 # Static web viewer
+│   ├── src/
+│   │   ├── components/     # Lit components (welcome, logs, status)
+│   │   ├── p2p/            # js-libp2p connection management
+│   │   ├── proxy/          # Service Worker + WebSocket shim
+│   │   └── index.ts
+│   ├── public/
+│   ├── package.json
+│   └── vite.config.ts
+└── docs/
+```
+
+**Note:** Project initialization using these commands should be the first implementation story.
