@@ -1,5 +1,5 @@
 ---
-stepsCompleted: ['step-01-init', 'step-02-discovery', 'step-02b-vision', 'step-02c-executive-summary', 'step-03-success', 'step-04-journeys', 'step-05-domain', 'step-06-innovation']
+stepsCompleted: ['step-01-init', 'step-02-discovery', 'step-02b-vision', 'step-02c-executive-summary', 'step-03-success', 'step-04-journeys', 'step-05-domain', 'step-06-innovation', 'step-07-project-type', 'step-08-scoping', 'step-09-functional', 'step-10-nonfunctional', 'step-11-polish', 'step-12-complete']
 inputDocuments: ['product-brief-p2p-tunnel.md']
 workflowType: 'prd'
 documentCounts:
@@ -18,6 +18,9 @@ classification:
 
 **Author:** Faraj
 **Date:** 2026-04-08
+**Project Type:** CLI Tool + Web App (Go CLI + Lit/TypeScript static web viewer)
+**Domain:** Developer Tools / Networking
+**Complexity:** Medium | **Context:** Greenfield
 
 ## Executive Summary
 
@@ -29,14 +32,7 @@ The primary use case is collaborative remote development: running self-hosted to
 
 The zero-install browser viewer is the key innovation. No other P2P tunneling tool has solved the "one end is just a browser" problem. The receiver clicks a link and is inside the locally-hosted application — interacting with a terminal, an IDE, or any web app live — without installing anything. Combined with direct P2P connectivity (relay only as fallback for restrictive networks), this eliminates the entire class of problems caused by relay-dependent architectures: no degrading free tiers, no bandwidth bills that scale with usage, no session expirations mid-pairing-session.
 
-The timing is right: libp2p browser transports (WebTransport, WebRTC-Direct) reached production maturity in 2025, ngrok's free tier continues to shrink, and no existing tool combines P2P tunneling with a zero-install browser viewer for sustained collaborative use.
-
-## Project Classification
-
-- **Project Type:** CLI Tool + Web App (hybrid — Go CLI as primary developer interface, Lit/TypeScript static web viewer as receiver interface)
-- **Domain:** Developer Tools / Networking
-- **Complexity:** Medium (libp2p P2P networking, NAT hole-punching, Service Worker proxying, multi-transport browser support — no regulatory concerns)
-- **Project Context:** Greenfield
+libp2p browser transports (WebTransport, WebRTC-Direct) reached production maturity in 2025, ngrok's free tier continues to shrink, and no existing tool combines P2P tunneling with a zero-install browser viewer for sustained collaborative use.
 
 ## Success Criteria
 
@@ -76,14 +72,49 @@ The timing is right: libp2p browser transports (WebTransport, WebRTC-Direct) rea
 
 ## Product Scope
 
-### MVP - Minimum Viable Product
+### MVP Strategy
 
-- **CLI (Go):** Single HTTP port forwarding, shareable link generation, libp2p networking with P2P-first + relay fallback, auto-reconnection logic, multi-viewer support (multiple simultaneous browser connections)
-- **Web Viewer (Lit/TS):** Static app, token auth, Service Worker-based content proxying, full SPA support, WebSocket proxying (critical for TTYD/VS Code Server), reconnection UI (silent <3s, visible indicator >3s)
-- **Transports:** WebTransport + WebRTC-Direct fallback
-- **Telemetry:** Opt-in anonymous usage tracking with local random ID, first-run prompt, disable option
-- **Hosting:** Viewer deployed at a public URL
-- **Docs:** Getting-started guide, README
+**Approach:** Problem-solving MVP — deliver the core tunneling experience end-to-end. If a developer can run one command, share one link, and have a colleague interact with their self-hosted web app live in a browser over P2P, the product works.
+
+**Resource:** Solo developer with AI tooling assistance. Feasible given heavy reliance on libp2p's existing infrastructure.
+
+### MVP Capabilities
+
+- **CLI `serve`:** Single HTTP port forwarding, share link generation, multi-viewer (default 5, configurable), auto-reconnect, live connection count/list, port validation (soft warning), session summary on close
+- **CLI `relay`:** Built-in relay mode with configurable limits (max connections, max duration, max bandwidth per peer), optional peer allowlist, peertunnel-only protocol negotiation
+- **Web Viewer:** Token auth, Service Worker transparent proxy (all HTTP + WebSocket traffic), connection logs with real-time status, welcome/idle page with manual connect input, reconnection UI (silent <3s, visible >3s), "tunnel closed by host" notification, mobile-friendly shell
+- **Transports:** WebTransport (Chromium, Firefox) + WebRTC-Direct (Safari)
+- **Networking:** libp2p with Noise encryption, NAT hole-punching via DCUtR, peer discovery via IPFS/libp2p bootstrap nodes, Circuit Relay v2 fallback
+- **Telemetry:** Opt-in anonymous tracking with local random ID, first-run prompt, disable option
+- **Infrastructure:** 1-2 community relay instances on VPS, hardcoded as defaults
+- **Config:** `~/.peertunnel/config.yaml` for persistent settings (telemetry ID, opt-in)
+- **Docs:** README, getting-started guide
+- **SEO:** Essential meta tags and Open Graph on viewer welcome page
+
+### Explicitly Deferred (Post-MVP)
+
+- Shell completion
+- HTTPS on local side
+- JSON output mode
+- Multi-port forwarding
+- Named/persistent tunnels
+- Custom viewer domains
+- Peer ID allowlists on `serve` mode
+- Telemetry dashboard
+
+### Risk Mitigation
+
+**Technical Risks:**
+- Service Worker interception coverage — the proxy is transparent; all HTTP and WebSocket traffic routes through the P2P channel. The web app doesn't know it's being served over P2P. Risk is in edge cases (specific browser behaviors, exotic request types), mitigated by cross-browser testing.
+- P2P connection reliability — mitigated by two-step fallback (direct → relay) and automated NAT simulation testing in CI.
+- Sustained session stability (5+ hours) — mitigated by auto-reconnection logic and relay fallback.
+
+**Market Risks:**
+- "Does anyone actually need this?" — mitigated by solving a real pain point the developer already experiences (sharing TTYD/VS Code Server with colleagues). The developer IS the first user.
+- Discoverability — mitigated by essential SEO, open source presence, and a distinctive name (peertunnel).
+
+**Resource Risks:**
+- Solo developer with AI tooling. If scope needs cutting, relay mode is the most independent feature — community relays could launch after the core serve/viewer flow works.
 
 ## User Journeys
 
@@ -199,7 +230,11 @@ Clear, unambiguous. Not a vague "connection lost" — she knows the host ended i
 
 **Opening Scene:** They need reliable fallback connectivity for their distributed team. The public community relays work but they want something under their control.
 
-**Rising Action:** They deploy a standard libp2p Circuit Relay v2 server — an existing open-source implementation from go-libp2p. Configuration is minimal: set the relay address, optionally restrict access. Documentation references the upstream go-libp2p relay setup.
+**Rising Action:** They install peertunnel on a VPS and run it in relay mode:
+```
+peertunnel relay --port 4001 --max-connections 50 --max-duration 6h
+```
+Configuration is minimal. Optionally restrict access with `--allowed-peers`.
 
 **Climax:** Team members configure their CLI to use the private relay as a preferred fallback:
 ```
@@ -239,7 +274,7 @@ The tunneled app loads.
 | Viewer restrictive network | Relay fallback, connection type indicator, honest status logging |
 | Host disconnection | Auto-reconnection (<3s silent, >3s visible), connection resilience |
 | Host tunnel close | Graceful shutdown, viewer notification ("tunnel closed by host") |
-| Relay operator | Standard libp2p Circuit Relay v2, self-hostable, configurable relay address in CLI |
+| Relay operator | `peertunnel relay` mode, self-hostable, configurable relay address in CLI |
 | New visitor landing | Viewer welcome/idle state, manual connection input, brief project intro, same-page UX |
 
 ## Innovation & Novel Patterns
@@ -276,7 +311,227 @@ No existing tool occupies the "P2P + browser receiver" quadrant.
 - **Two-step transport validation** — direct (WebTransport/WebRTC-Direct) → relay fallback. Test both paths independently and the failover between them.
 - **Cross-browser testing** — WebTransport (Chrome, Firefox, Edge, Opera) and WebRTC-Direct (Safari fallback) coverage.
 
-### Risk Mitigation
+## Technical Specifications
 
-- **Transport fallback is simple and predictable** — two steps only (direct → relay), no complex negotiation chain.
-- **Relay is a known quantity** — libp2p Circuit Relay v2 is battle-tested across 30+ networks. Community relays + self-hosted option ensures fallback availability.
+### CLI — Command Structure
+
+```
+peertunnel serve --port <port> [--relay <multiaddr>] [--max-viewers <n>]
+peertunnel relay [--port <port>] [--max-connections <n>] [--max-duration <duration>] [--max-bandwidth-per-peer <limit>] [--allowed-peers <peer-id,...>]
+peertunnel version
+peertunnel config [--reset-telemetry]
+```
+
+- `serve` — exposes localhost port, generates share link, shows live connection status.
+- `relay` — runs as a Circuit Relay v2 node with relaxed resource limits for sustained tunneling. Same binary, different mode.
+- `version` — prints version info.
+- `config` — manages persistent configuration (telemetry ID, opt-in status).
+
+**Serve mode flags:**
+- `--port` — local HTTP port to expose (required)
+- `--relay` — custom relay multiaddr for fallback connectivity
+- `--max-viewers` — max simultaneous viewer connections (default 5)
+
+**Relay mode flags:**
+- `--port` — listen port (default 4001)
+- `--max-connections` — hard cap on simultaneous relay sessions (default 50)
+- `--max-duration` — max session duration (default 6h)
+- `--max-bandwidth-per-peer` — per-peer bandwidth cap
+- `--allowed-peers` — optional peer ID allowlist for private relays. Open by default.
+
+**Output:** Human-readable only for MVP. No `--json` mode.
+
+**Configuration persistence:**
+- Per-session values (port, relay address, allowed-peers, max-viewers) are CLI flags.
+- Persistent values (telemetry local ID, opt-in status) live in `~/.peertunnel/config.yaml`.
+
+### CLI — Output Formats
+
+**Tunnel startup:**
+```
+peertunnel v1.0
+Exposing localhost:8080
+Peer ID: 12D3KooW...
+Share link: https://viewer.peertunnel.dev/#12D3KooW....<token>
+Waiting for connections...
+```
+
+**Connection events:**
+```
+[14:32:01] Viewer connected (direct P2P) — 1 active connection
+[14:33:15] Viewer connected (direct P2P) — 2 active connections
+[14:45:03] Viewer disconnected — 1 active connection
+```
+
+**Shutdown:**
+```
+Closing tunnel... Notifying 2 active viewer(s).
+Tunnel closed. Session duration: 2h 14m.
+```
+
+**Port validation warning:**
+```
+Warning: No HTTP server detected on localhost:8080. Tunnel will start anyway.
+```
+
+**Relay startup:**
+```
+peertunnel relay v1.0
+Listening on /ip4/0.0.0.0/tcp/4001
+Relay Peer ID: 12D3KooW...
+Max connections: 50 | Max duration: 6h
+Access: open
+Waiting for relay requests...
+```
+
+### Relay Network Architecture
+
+- **Community relays:** 1-2 peertunnel relay instances run on VPS by the project. Their multiaddrs are hardcoded as defaults in the CLI. Users get relay fallback out of the box.
+- **Self-hosted relays:** Anyone with a VPS runs `peertunnel relay` — one command, same binary. Teams can restrict access via `--allowed-peers`.
+- **Security:** libp2p handles all relay authentication automatically. Every relay has a peer ID derived from its keypair. Connecting clients verify the relay's identity via the Noise protocol. The peer ID in the multiaddr (`/p2p/12D3KooW...`) IS the public key identity — connections fail if the server doesn't hold the matching private key.
+- **Abuse prevention:** Rate limiting per peer, max session duration, max total connections, peertunnel-only protocol negotiation.
+- **Discovery/hole-punching:** Leverages existing IPFS/libp2p bootstrap infrastructure at `bootstrap.libp2p.io` for peer discovery and NAT traversal (DCUtR). No custom discovery infrastructure needed.
+
+### Web Viewer — Browser Matrix
+
+| Browser | Transport | Support Level |
+|---|---|---|
+| Chrome (stable) | WebTransport | Primary |
+| Edge (stable) | WebTransport | Primary |
+| Opera (stable) | WebTransport | Primary |
+| Firefox (stable) | WebTransport | Primary |
+| Safari (stable) | WebRTC-Direct | Fallback transport |
+
+Minimum target: current stable versions of any Chromium-based browser and Safari.
+
+### Web Viewer — Design Requirements
+
+- **Responsive:** Viewer shell (welcome page, connection logs, reconnection UI) is mobile-friendly. Tunneled content responsiveness is the host app's responsibility.
+- **Accessibility:** Semantic HTML, keyboard navigable inputs, screen reader compatible status messages, sufficient color contrast.
+- **SEO:** Descriptive `<title>` and `<meta description>`, Open Graph tags for link previews, basic structured data on the welcome page.
+
+### Implementation Considerations
+
+- CLI is a single Go binary with zero external dependencies
+- Viewer is a 100% static site (Lit + Vite build) deployable to any static host
+- No backend infrastructure for either component (relay is optional infrastructure)
+- Config file created on first run with telemetry opt-in prompt
+- Relay mode uses go-libp2p's Circuit Relay v2 with configurable resource limits
+
+## Functional Requirements
+
+### Tunnel Hosting
+
+- **FR1:** Host can expose a single local HTTP port as a P2P tunnel with one command
+- **FR2:** Host can receive a shareable link containing peer ID and auth token upon tunnel start
+- **FR3:** Host can view a live count of active viewer connections
+- **FR4:** Host can view a list of active viewer connections with connection type (direct/relay)
+- **FR5:** Host can receive a session summary (duration, connection count) on tunnel close
+- **FR6:** Host can gracefully shut down the tunnel with notification sent to all connected viewers
+- **FR7:** Host can specify a custom relay address for fallback connectivity
+- **FR8:** Host can auto-reconnect after a network interruption without restarting the tunnel
+
+### Tunnel Viewing
+
+- **FR9:** Viewer can access a tunneled web application by clicking a shared link in any supported browser
+- **FR10:** Viewer can see real-time connection status logs during connection establishment
+- **FR11:** Viewer can interact with the tunneled web application with full HTTP and WebSocket support
+- **FR12:** Viewer can experience silent reconnection for network interruptions under 3 seconds
+- **FR13:** Viewer can see a "reconnecting..." indicator for interruptions longer than 3 seconds
+- **FR14:** Viewer can see a "tunnel closed by host" message when the host ends the session
+- **FR15:** Viewer can see a connection type indicator (direct P2P vs relayed)
+- **FR16:** Multiple viewers can connect to the same tunnel simultaneously
+
+### Viewer Welcome & Manual Connect
+
+- **FR17:** Visitor can see a welcome page with a brief description of peertunnel when accessing the viewer URL without a connection string
+- **FR18:** Visitor can manually enter a connection string (peer ID + token) and connect via an input field
+- **FR19:** Viewer auto-connects when the URL contains a connection string in the fragment
+
+### P2P Networking
+
+- **FR20:** System can establish direct P2P connections via WebTransport as the primary transport
+- **FR21:** System can fall back to WebRTC-Direct for browsers without WebTransport support (Safari)
+- **FR22:** System can fall back to Circuit Relay v2 when direct P2P connection fails
+- **FR23:** System can perform NAT hole-punching via DCUtR for direct connectivity
+- **FR24:** System can discover peers via IPFS/libp2p bootstrap infrastructure
+- **FR25:** System can encrypt all traffic end-to-end via libp2p Noise protocol
+- **FR26:** System can authenticate connections using a token bundled in the share link
+
+### Content Proxying
+
+- **FR27:** Service Worker can transparently intercept and proxy all HTTP requests from tunneled content through the P2P channel
+- **FR28:** Service Worker can transparently proxy WebSocket connections through the P2P channel
+- **FR29:** Service Worker can handle sub-resource loading (JS, CSS, images, fonts) through the P2P channel
+- **FR30:** Service Worker can support client-side routing in tunneled SPAs
+
+### Relay Operations
+
+- **FR31:** Operator can run a relay node using the same peertunnel binary with a `relay` subcommand
+- **FR32:** Operator can configure maximum simultaneous connections on the relay
+- **FR33:** Operator can configure maximum session duration on the relay
+- **FR34:** Operator can configure maximum bandwidth per peer on the relay
+- **FR35:** Operator can restrict relay access to specific peer IDs via an allowlist
+- **FR36:** Relay can reject non-peertunnel protocol traffic
+- **FR37:** Relay can authenticate connecting peers via libp2p keypair verification
+
+### Port Validation
+
+- **FR38:** CLI can perform a soft HTTP check on the target localhost port before starting the tunnel
+- **FR39:** CLI can warn (not block) when no HTTP server is detected on the target port
+
+### Telemetry
+
+- **FR40:** CLI can prompt the user to opt in or out of anonymous telemetry on first run
+- **FR41:** CLI can generate and persist a local random ID for anonymous usage tracking
+- **FR42:** User can disable telemetry at any time via CLI config
+- **FR43:** Telemetry can collect aggregate session data (count, duration) without personal information
+
+### Configuration
+
+- **FR44:** CLI can persist settings (telemetry ID, opt-in status) in a config file at `~/.peertunnel/config.yaml`
+- **FR45:** User can reset telemetry identity via a config subcommand
+- **FR46:** Host can configure maximum simultaneous viewer connections via `--max-viewers` flag (default 5)
+
+## Non-Functional Requirements
+
+### Performance
+
+- Tunnel connection establishment (direct P2P) completes in under 3 seconds
+- Tunnel connection establishment (relay fallback) completes in under 5 seconds
+- HTTP request latency through the tunnel adds less than 100ms overhead on top of network RTT
+- WebSocket message latency through the tunnel adds less than 50ms overhead on top of network RTT
+- Service Worker proxy adds less than 10ms overhead per intercepted request
+- Tunnel supports sustained throughput sufficient for interactive web applications (VS Code Server, TTYD)
+
+### Security
+
+- All P2P traffic is end-to-end encrypted via libp2p Noise protocol — no plaintext data on the wire
+- Token-based authentication prevents unauthorized viewers from connecting to a tunnel
+- Relay nodes verify connecting peers via libp2p keypair authentication
+- Relay nodes reject non-peertunnel protocol traffic
+- No user data, session content, or traffic passes through any peertunnel-controlled infrastructure (except relay fallback, where traffic is encrypted end-to-end and the relay cannot inspect it)
+- Telemetry collects zero personal information — only aggregate session counts and durations tied to a random local ID
+- Config file permissions are set to user-only read/write (`600`)
+
+### Scalability
+
+- A single tunnel host supports up to 5 simultaneous viewer connections by default, configurable via `--max-viewers` flag
+- A community relay instance on a modest VPS supports up to 50 concurrent relay sessions by default, configurable via `--max-connections` flag
+- Self-hosted relay capacity is configurable via CLI flags
+- No central server bottleneck — scaling is per-host and per-relay, not centralized
+
+### Reliability
+
+- Tunnels remain stable for 5+ continuous hours under normal network conditions
+- Auto-reconnection restores the tunnel after network interruptions without user intervention
+- Reconnections under 3 seconds are invisible to viewers
+- Graceful degradation: if direct P2P fails, relay fallback activates automatically
+- CLI exits cleanly on SIGINT/SIGTERM with viewer notification and session summary
+
+### Compatibility
+
+- CLI binary runs on Linux, macOS, and Windows (amd64 and arm64)
+- CLI binary size does not exceed 200MB
+- Web viewer works on current stable versions of all Chromium-based browsers and Safari
+- Web viewer shell is responsive and functional on mobile devices
