@@ -452,10 +452,10 @@ Minimum target: current stable versions of any Chromium-based browser and Safari
 
 - **FR20:** System can establish direct P2P connections via WebTransport as the primary transport
 - **FR21:** System can fall back to WebRTC-Direct for browsers without WebTransport support (Safari)
-- **FR22:** System can fall back to relay connections when direct P2P connection fails
-- **FR23:** System can perform NAT hole-punching for direct connectivity
-- **FR24:** System can discover peers via distributed bootstrap infrastructure
-- **FR25:** System can encrypt all traffic end-to-end with no plaintext on the wire
+- **FR22:** System can fall back to Circuit Relay v2 when direct P2P connection fails
+- **FR23:** System can perform NAT hole-punching via DCUtR for direct connectivity
+- **FR24:** System can discover peers via IPFS/libp2p bootstrap infrastructure
+- **FR25:** System can encrypt all traffic end-to-end via libp2p Noise protocol
 - **FR26:** System can authenticate connections using a token bundled in the share link
 
 ### Content Proxying
@@ -473,7 +473,7 @@ Minimum target: current stable versions of any Chromium-based browser and Safari
 - **FR34:** Operator can configure maximum bandwidth per peer on the relay
 - **FR35:** Operator can restrict relay access to specific peer IDs via an allowlist
 - **FR36:** Relay can reject non-peertunnel protocol traffic
-- **FR37:** Relay can authenticate connecting peers via cryptographic keypair verification
+- **FR37:** Relay can authenticate connecting peers via libp2p keypair verification
 
 ### Port Validation
 
@@ -506,9 +506,9 @@ Minimum target: current stable versions of any Chromium-based browser and Safari
 
 ### Security
 
-- All P2P traffic is end-to-end encrypted — no plaintext data on the wire
+- All P2P traffic is end-to-end encrypted via libp2p Noise protocol — no plaintext data on the wire
 - Token-based authentication prevents unauthorized viewers from connecting to a tunnel
-- Relay nodes verify connecting peers via cryptographic keypair authentication
+- Relay nodes verify connecting peers via libp2p keypair authentication
 - Relay nodes reject non-peertunnel protocol traffic
 - No user data, session content, or traffic passes through any peertunnel-controlled infrastructure (except relay fallback, where traffic is encrypted end-to-end and the relay cannot inspect it)
 - Telemetry collects zero personal information — only aggregate session counts and durations tied to a random local ID
