@@ -1,5 +1,5 @@
 ---
-stepsCompleted: [1, 2, 3]
+stepsCompleted: [1, 2, 3, 4]
 inputDocuments: ['prd.md', 'prd-validation-report.md', 'product-brief-p2p-tunnel.md']
 workflowType: 'architecture'
 project_name: 'peertunnel'
@@ -146,3 +146,109 @@ peertunnel/
 ```
 
 **Note:** Project initialization using these commands should be the first implementation story.
+
+## Core Architectural Decisions
+
+### Decision Priority Analysis
+
+**Critical Decisions (Block Implementation):**
+- P2P stream strategy (hybrid: control stream + per-request data streams)
+- HTTP serialization format (Protocol Buffers)
+- Token authentication scheme (crypto-random)
+- Tunneled content rendering (Service Worker full-page takeover)
+- WebSocket shim injection (SW script injection into HTML responses)
+
+**Important Decisions (Shape Architecture):**
+- Share link format (dot-separated fragment)
+- Viewer state management (Lit reactive properties)
+- CLI distribution (GitHub Releases + go install)
+- Viewer hosting (GitHub Pages)
+- CI/CD (GitHub Actions + GoReleaser)
+
+**Deferred Decisions (Post-MVP):**
+- Shell completion generation
+- HTTPS on local side
+- JSON output mode
+- Named/persistent tunnels
+- Custom viewer domains
+
+### P2P Protocol Design
+
+**Stream Multiplexing Strategy: Hybrid**
+- Decision: Persistent control stream for tunnel lifecycle messages + new libp2p stream per HTTP request for data
+- Rationale: Control messages (tunnel closed, viewer count, shutdown signals) need a persistent channel. Per-request streams keep HTTP proxying simple — libp2p's yamux handles underlying multiplexing. No custom multiplexing protocol needed.
+- Affects: CLI tunnel package, viewer P2P module
+
+**HTTP Serialization: Protocol Buffers**
+- Decision: Define HTTP request/response messages in protobuf, shared between Go and TypeScript
+- Rationale: Type-safe, cross-language, handles serialization edge cases (binary bodies, header encoding). Minimal dependency footprint. Shared .proto files ensure CLI and viewer agree on wire format.
+- Affects: CLI tunnel package, viewer proxy module, shared proto definitions
+
+**WebSocket Frame Bridging: Dedicated Stream Per WebSocket**
+- Decision: Each WebSocket connection from tunneled content gets its own libp2p stream
+- Rationale: Clean 1:1 mapping to WebSocket semantics. Each connection is independently managed (open/close without affecting others). libp2p handles multiplexing at the transport layer.
+- Affects: CLI tunnel package, viewer WebSocket shim
+
+### Authentication & Security
+
+**Token Format: Crypto-Random Bytes**
+- Decision: 32 bytes, base64url-encoded, generated on tunnel startup
+- Rationale: Token's only purpose is preventing unauthorized viewers. No expiry needed (tunnel lifetime = token lifetime). No server to verify against. 256 bits of entropy is more than sufficient. CLI validates by simple comparison.
+- Affects: CLI serve command, viewer P2P connection module
+
+**Share Link Format: Dot-Separated Fragment**
+- Decision: `https://viewer.peertunnel.dev/#<peerID>.<token>`
+- Rationale: Matches PRD examples. Human-scannable (clear boundary between peer ID and token). Extensible via additional dot-separated segments post-MVP. Fragment is never sent to server.
+- Affects: CLI link generation, viewer URL parsing
+
+### Frontend Architecture
+
+**Tunneled Content Rendering: Full-Page Takeover**
+- Decision: Once connected, viewer navigates to a Service Worker-controlled URL that serves tunneled content directly. Viewer shell disappears. Shell reappears on disconnect/error.
+- Rationale: PRD user journeys describe the tunneled app "filling the browser." Full-page takeover gives tunneled apps the complete viewport, avoids iframe sandboxing issues (some apps detect and refuse iframe embedding), and provides the most transparent proxy experience.
+- Affects: Viewer components, Service Worker, reconnection UX
+
+**Viewer State Management: Lit Reactive Properties**
+- Decision: Connection state machine managed via reactive properties in the root Lit component. No external state library.
+- Rationale: Viewer state is simple and linear (idle → connecting → connected → disconnected/reconnecting → error). No shared state across unrelated components. Lit's built-in reactivity is sufficient.
+- Affects: Viewer components
+
+**WebSocket Shim Injection: Service Worker Script Injection**
+- Decision: Service Worker injects a shim script at the top of HTML responses before serving them. The shim overrides `window.WebSocket` with a custom implementation that bridges frames to the P2P connection via MessageChannel.
+- Rationale: Full-page takeover means no iframe `contentWindow` access. SW script injection runs before any tunneled app code, ensuring all WebSocket connections are captured. MessageChannel provides efficient communication between the shim and SW.
+- Affects: Service Worker proxy, WebSocket shim module
+
+### Infrastructure & Deployment
+
+**Viewer Hosting: GitHub Pages**
+- Decision: Deploy static viewer to GitHub Pages with custom domain (viewer.peertunnel.dev)
+- Rationale: Zero cost, zero vendor lock-in, automatic deploy via GitHub Actions. 100% static site requires no server-side configuration. Users can self-host on any static provider.
+- Affects: CI/CD pipeline, viewer build
+
+**CLI Distribution: GitHub Releases + go install**
+- Decision: GoReleaser builds cross-platform binaries attached to GitHub Releases. Go developers can also use `go install github.com/farajfarook/peertunnel/cli@latest`.
+- Rationale: GitHub Releases covers non-Go users (pre-built binaries). `go install` requires zero setup — Go modules pull directly from the public Git repo via proxy.golang.org. No registry accounts or API keys needed.
+- Affects: CI/CD pipeline, release process
+
+**CI/CD: GitHub Actions + GoReleaser**
+- Decision: GitHub Actions for CI (Go build/test, Vite build/test on PRs), GoReleaser on tag push for releases
+- Rationale: Free for public repos, standard for open-source Go projects, native GitHub integration.
+- Affects: Repository CI configuration
+
+### Decision Impact Analysis
+
+**Implementation Sequence:**
+1. Shared proto definitions (wire format for HTTP req/res and control messages)
+2. CLI libp2p networking layer (stream management, transport setup)
+3. CLI tunnel hosting (HTTP proxying to localhost, WebSocket bridging)
+4. Viewer P2P connection module (js-libp2p, transport negotiation)
+5. Viewer Service Worker proxy (HTTP interception, proto deserialization)
+6. Viewer WebSocket shim (constructor patching, MessageChannel bridge)
+7. CLI relay mode (Circuit Relay v2 configuration)
+8. Integration: share link generation → URL parsing → auth → full flow
+
+**Cross-Component Dependencies:**
+- Proto definitions must be shared/synchronized between CLI and viewer
+- Token format must match between CLI generation and viewer validation
+- Stream protocol IDs must be identical on both sides
+- Control message schema affects both CLI connection tracking and viewer reconnection UX
