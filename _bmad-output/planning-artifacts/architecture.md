@@ -1,5 +1,8 @@
 ---
-stepsCompleted: [1, 2, 3, 4, 5, 6]
+stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8]
+lastStep: 8
+status: 'complete'
+completedAt: '2026-04-13'
 inputDocuments: ['prd.md', 'prd-validation-report.md', 'product-brief-p2p-tunnel.md']
 workflowType: 'architecture'
 project_name: 'peertunnel'
@@ -530,3 +533,155 @@ Host's localhost:PORT
 - CLI binaries: GoReleaser attaches to GitHub Releases on tag push
 - Viewer: GitHub Actions builds and deploys `viewer/dist/` to GitHub Pages
 - Both triggered independently — viewer deploys on main branch push, CLI releases on version tags
+
+## Architecture Validation Results
+
+### Coherence Validation ✅
+
+**Decision Compatibility:**
+All technology choices are compatible and conflict-free:
+- Go + Cobra + go-libp2p — fully compatible Go ecosystem
+- Lit + Vite + TypeScript + js-libp2p — fully compatible JS/TS ecosystem
+- Protobuf with Buf — supports codegen for both Go and TypeScript
+- Hybrid stream strategy works cleanly with protobuf message serialization
+- Full-page takeover + Service Worker + WebSocket shim form a coherent proxy architecture
+- No contradictory decisions found
+
+**Pattern Consistency:**
+- Go naming follows `gofmt`/`go vet` standards (enforced by tooling)
+- TypeScript naming follows Lit community conventions (kebab-case files, PascalCase classes)
+- Proto naming follows standard protobuf style guide (PascalCase messages, snake_case fields)
+- All three naming systems are internally consistent and don't conflict across the P2P boundary
+
+**Structure Alignment:**
+- `cli/internal/p2p/` as the single libp2p import point — clean dependency boundary
+- `proto/` at project root with codegen to both components — single source of truth enforced
+- `cmd/` → `internal/` dependency direction enforced by Go conventions
+- Viewer `src/` organization mirrors the three concerns: components (UI), p2p (connection), proxy (tunneling)
+
+### Requirements Coverage Validation ✅
+
+**Functional Requirements Coverage:**
+
+| FR Category | Status | Architectural Support |
+|---|---|---|
+| Tunnel Hosting (FR1-FR8) | ✅ Full | `cli/internal/tunnel/` + `cli/cmd/serve.go` |
+| Tunnel Viewing (FR9-FR16) | ✅ Full | `viewer/src/components/` + `viewer/src/proxy/` |
+| Viewer Welcome (FR17-FR19) | ✅ Full | `viewer/src/components/pt-welcome-page.ts` |
+| P2P Networking (FR20-FR26) | ✅ Full | `cli/internal/p2p/` + `viewer/src/p2p/` |
+| Content Proxying (FR27-FR30) | ✅ Full | SW + WS shim + protobuf framing |
+| Relay Operations (FR31-FR37) | ✅ Full | `cli/internal/relay/` + `cli/cmd/relay.go` |
+| Port Validation (FR38-FR39) | ✅ Full | `cli/internal/tunnel/validate.go` |
+| Telemetry (FR40-FR43) | ✅ Full | `cli/internal/telemetry/` (local collection, remote endpoint deferred) |
+| Configuration (FR44-FR46) | ✅ Full | `cli/internal/config/` + `cli/cmd/config.go` |
+
+**Non-Functional Requirements Coverage:**
+
+| NFR Category | Status | Architectural Support |
+|---|---|---|
+| Performance | ✅ Addressed | Lightweight per-request streams, protobuf serialization, <10ms SW overhead target |
+| Security | ✅ Addressed | Crypto-random token auth, Noise encryption via libp2p, config file permissions 600 |
+| Scalability | ✅ Addressed | Configurable viewer limits per host, configurable connection limits per relay |
+| Reliability | ✅ Addressed | Reconnection state machine with <3s/>3s threshold, graceful shutdown sequence |
+| Compatibility | ✅ Addressed | Cross-platform Go binary (amd64/arm64), browser matrix with WebTransport/WebRTC-Direct fallback |
+
+### Implementation Readiness Validation ✅
+
+**Decision Completeness:**
+- All critical decisions documented with rationale and affected components
+- Technology versions verified via web search (Cobra v1.9.x, Lit 3.3.x, Vite 9.x)
+- Implementation patterns cover 15 conflict points with concrete examples
+- Enforcement guidelines and anti-patterns clearly specified
+
+**Structure Completeness:**
+- Complete directory tree with every file and its purpose annotated
+- All FR categories mapped to specific files and directories
+- Integration points (proto codegen, P2P boundary, proxy boundary) clearly defined
+- Development, build, and deployment workflows specified
+
+**Pattern Completeness:**
+- Naming conventions cover Go, TypeScript, Proto, and libp2p protocol IDs
+- Error handling patterns specified for both Go and TypeScript with concrete approaches
+- Communication patterns (control messages, state machine) fully defined
+- Process patterns (graceful shutdown, logging levels) documented step-by-step
+
+### Gap Analysis Results
+
+**Critical Gaps:** None identified. All blocking decisions are made.
+
+**Important Gaps (documented for future resolution):**
+
+1. **Telemetry collection endpoint** — FR40-43 specify opt-in telemetry with local random ID. Architecture supports local collection (`cli/internal/telemetry/`). Remote reporting endpoint deferred to post-MVP — telemetry data collected locally, endpoint specified when telemetry dashboard is built.
+
+2. **Integration and E2E testing infrastructure** — PRD mentions "automated NAT simulation testing — Docker containers with iptables rules" and "cross-browser testing." Architecture specifies co-located unit tests. Integration/E2E test infrastructure (Docker NAT simulation, Playwright for cross-browser) to be defined when first integration tests are needed.
+
+3. **Buf codegen configuration** — `buf.yaml` specified in `proto/`. A `buf.gen.yaml` file is also needed to configure Go and TypeScript codegen output paths. To be created during project initialization story.
+
+**Nice-to-Have Gaps:**
+
+4. **Viewer linting/formatting** — Go has built-in `gofmt`/`go vet`. Viewer tooling (ESLint, Prettier) not specified. Can be added during project scaffolding.
+
+### Architecture Completeness Checklist
+
+**✅ Requirements Analysis**
+- [x] Project context thoroughly analyzed (46 FRs, 20 NFRs)
+- [x] Scale and complexity assessed (medium, 6 components)
+- [x] Technical constraints identified (SW WebSocket limitation, cross-platform libp2p interop)
+- [x] Cross-cutting concerns mapped (7 concerns including dual proxy mechanism)
+
+**✅ Architectural Decisions**
+- [x] Critical decisions documented with rationale (5 critical, 5 important)
+- [x] Technology stack fully specified with verified versions
+- [x] P2P protocol design defined (hybrid streams, protobuf, dedicated WS streams)
+- [x] Authentication and security designed (crypto-random tokens, dot-separated links)
+- [x] Frontend architecture designed (full-page takeover, Lit reactive state, SW script injection)
+- [x] Infrastructure and deployment planned (GitHub Pages, GoReleaser, GitHub Actions)
+
+**✅ Implementation Patterns**
+- [x] Naming conventions established (Go, TypeScript, Proto, libp2p protocol IDs)
+- [x] Structure patterns defined (test co-location, proto at root)
+- [x] Communication patterns specified (control messages, state machine states)
+- [x] Process patterns documented (error handling, graceful shutdown, logging levels)
+- [x] Enforcement guidelines and anti-patterns documented
+
+**✅ Project Structure**
+- [x] Complete directory structure defined with file-level annotations
+- [x] Component boundaries established (P2P, proxy, CLI internal)
+- [x] Integration points mapped (proto codegen, P2P boundary, proxy boundary)
+- [x] Requirements to structure mapping complete (9 FR categories → specific files)
+- [x] Data flow documented
+
+### Architecture Readiness Assessment
+
+**Overall Status:** READY FOR IMPLEMENTATION
+
+**Confidence Level:** High — all critical decisions made, no blocking gaps, coherence validated across all dimensions.
+
+**Key Strengths:**
+- Clean separation between CLI and viewer with well-defined P2P boundary
+- Protobuf as single source of truth for cross-component communication eliminates wire format ambiguity
+- WebSocket limitation identified early with concrete shim injection solution
+- Every FR mapped to specific file locations — no ambiguity for implementing agents
+- Consistent patterns across Go and TypeScript prevent cross-component conflicts
+
+**Areas for Future Enhancement:**
+- Telemetry remote reporting endpoint (post-MVP)
+- Integration/E2E testing infrastructure (Docker NAT simulation, cross-browser testing)
+- Viewer linting/formatting tooling
+- Buf codegen configuration details
+
+### Implementation Handoff
+
+**AI Agent Guidelines:**
+- Follow all architectural decisions exactly as documented
+- Use implementation patterns consistently across all components
+- Respect project structure and boundaries — especially `internal/p2p/` as single libp2p import point
+- Refer to this document for all architectural questions
+- When in doubt about a pattern, check the Enforcement Guidelines section
+
+**First Implementation Priority:**
+1. Initialize monorepo structure (cli/ + viewer/ + proto/)
+2. Run starter commands: `cobra-cli init` for CLI, `npm create vite@latest` for viewer
+3. Create proto definitions (`tunnel.proto`, `control.proto`)
+4. Configure `buf.gen.yaml` for Go + TypeScript codegen
+5. Build CLI libp2p networking layer (`internal/p2p/`)
