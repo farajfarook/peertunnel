@@ -1,5 +1,5 @@
 ---
-stepsCompleted: [1, 2, 3, 4, 5]
+stepsCompleted: [1, 2, 3, 4, 5, 6]
 inputDocuments: ['prd.md', 'prd-validation-report.md', 'product-brief-p2p-tunnel.md']
 workflowType: 'architecture'
 project_name: 'peertunnel'
@@ -368,3 +368,165 @@ peertunnel/
 - Catching errors without handling them (empty catch blocks)
 - Hardcoding libp2p multiaddrs outside of config — use constants or config values
 - Mixing human-readable log output with structured logging in the same output stream
+
+## Project Structure & Boundaries
+
+### Complete Project Directory Structure
+
+```
+peertunnel/
+├── .github/
+│   └── workflows/
+│       ├── ci.yml                      # Go test/vet + Vite build/typecheck on PRs
+│       ├── release.yml                 # GoReleaser on tag push
+│       └── deploy-viewer.yml           # Build + deploy viewer to GitHub Pages on main
+├── .gitignore
+├── .goreleaser.yml                     # GoReleaser config for cross-platform builds
+├── LICENSE
+├── README.md
+├── CLAUDE.md
+│
+├── proto/                              # Shared protobuf definitions (source of truth)
+│   ├── tunnel.proto                    # HttpRequest, HttpResponse messages
+│   ├── control.proto                   # ControlMessage, ErrorMessage, enums
+│   └── buf.yaml                        # Buf configuration for linting/codegen
+│
+├── cli/                                # Go CLI
+│   ├── main.go                         # Entry point, Cobra root command
+│   ├── go.mod
+│   ├── go.sum
+│   ├── cmd/
+│   │   ├── root.go                     # Root command, global flags, version
+│   │   ├── serve.go                    # `peertunnel serve` subcommand
+│   │   ├── relay.go                    # `peertunnel relay` subcommand
+│   │   └── config.go                   # `peertunnel config` subcommand
+│   └── internal/
+│       ├── p2p/
+│       │   ├── host.go                 # libp2p host creation, transport config
+│       │   ├── host_test.go
+│       │   ├── transports.go           # WebTransport, WebRTC-Direct setup
+│       │   └── discovery.go            # Bootstrap peer discovery, DCUtR
+│       ├── tunnel/
+│       │   ├── server.go               # Tunnel server: accept viewers, manage streams
+│       │   ├── server_test.go
+│       │   ├── proxy.go                # HTTP proxy: forward requests to localhost
+│       │   ├── proxy_test.go
+│       │   ├── websocket.go            # WebSocket bridge: libp2p stream ↔ local WS
+│       │   ├── websocket_test.go
+│       │   ├── validate.go             # Port validation (soft HTTP check)
+│       │   └── token.go                # Token generation (crypto-random 32 bytes)
+│       ├── relay/
+│       │   ├── server.go               # Circuit Relay v2 node with resource limits
+│       │   ├── server_test.go
+│       │   └── limiter.go              # Per-peer bandwidth, connection, duration limits
+│       ├── config/
+│       │   ├── config.go               # Config file read/write (~/.peertunnel/config.yaml)
+│       │   └── config_test.go
+│       ├── telemetry/
+│       │   ├── telemetry.go            # Opt-in anonymous telemetry, local random ID
+│       │   └── telemetry_test.go
+│       └── proto/                      # Generated Go protobuf code (from root proto/)
+│           ├── tunnel.pb.go
+│           └── control.pb.go
+│
+├── viewer/                             # Static web viewer (Lit + TypeScript + Vite)
+│   ├── index.html                      # Entry point, loads app shell
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── vite.config.ts
+│   ├── public/
+│   │   ├── favicon.ico
+│   │   └── og-image.png               # Open Graph image for link previews
+│   └── src/
+│       ├── index.ts                    # App bootstrap, SW registration
+│       ├── components/
+│       │   ├── pt-app-shell.ts         # Root component, connection state machine
+│       │   ├── pt-app-shell.test.ts
+│       │   ├── pt-welcome-page.ts      # Welcome/idle state, manual connect input
+│       │   ├── pt-connection-log.ts    # Real-time connection status log
+│       │   ├── pt-reconnecting.ts      # Reconnection indicator (>3s)
+│       │   └── pt-error-view.ts        # Error states (tunnel closed, auth failed)
+│       ├── p2p/
+│       │   ├── connection.ts           # js-libp2p connection management
+│       │   ├── connection.test.ts
+│       │   ├── transports.ts           # WebTransport + WebRTC-Direct setup
+│       │   └── url-parser.ts           # Parse peer ID + token from URL fragment
+│       ├── proxy/
+│       │   ├── service-worker.ts       # SW: intercept fetch, proxy via P2P, inject WS shim
+│       │   ├── ws-shim.ts             # WebSocket constructor override (injected into pages)
+│       │   ├── message-channel.ts      # MessageChannel bridge between SW and WS shim
+│       │   └── request-handler.ts      # Serialize HTTP req to proto, deserialize response
+│       ├── proto/                      # Generated TypeScript protobuf code (from root proto/)
+│       │   ├── tunnel.ts
+│       │   └── control.ts
+│       └── styles/
+│           └── theme.css               # Minimal viewer shell styles
+│
+└── docs/                               # Project documentation
+    └── getting-started.md
+```
+
+### Architectural Boundaries
+
+**P2P Boundary (CLI ↔ Viewer):**
+- All communication flows through libp2p streams using protobuf-encoded messages
+- Three protocol channels: `/peertunnel/http/1.0.0`, `/peertunnel/ws/1.0.0`, `/peertunnel/control/1.0.0`
+- Token validation occurs at connection establishment — before any stream is opened
+- No direct function calls or shared runtime between CLI and viewer
+
+**Proxy Boundary (Viewer Shell ↔ Tunneled Content):**
+- Service Worker sits between tunneled content and the network — intercepts all fetch events
+- WebSocket shim is injected into HTML responses — runs in tunneled content's context
+- MessageChannel bridges SW ↔ WS shim communication
+- Tunneled content has no awareness of peertunnel — full transparency
+
+**CLI Internal Boundaries:**
+- `cmd/` depends on `internal/` — never the reverse
+- `internal/p2p/` is the only package that imports libp2p directly
+- `internal/tunnel/` uses `internal/p2p/` for stream management, proxies to localhost independently
+- `internal/relay/` uses `internal/p2p/` but has no dependency on `internal/tunnel/`
+
+### Requirements to Structure Mapping
+
+| FR Category | CLI Location | Viewer Location |
+|---|---|---|
+| Tunnel Hosting (FR1-FR8) | `cli/internal/tunnel/` + `cli/cmd/serve.go` | — |
+| Tunnel Viewing (FR9-FR16) | — | `viewer/src/components/`, `viewer/src/proxy/` |
+| Viewer Welcome (FR17-FR19) | — | `viewer/src/components/pt-welcome-page.ts` |
+| P2P Networking (FR20-FR26) | `cli/internal/p2p/` | `viewer/src/p2p/` |
+| Content Proxying (FR27-FR30) | `cli/internal/tunnel/proxy.go` | `viewer/src/proxy/` |
+| Relay Operations (FR31-FR37) | `cli/internal/relay/` + `cli/cmd/relay.go` | — |
+| Port Validation (FR38-FR39) | `cli/internal/tunnel/validate.go` | — |
+| Telemetry (FR40-FR43) | `cli/internal/telemetry/` | — |
+| Configuration (FR44-FR46) | `cli/internal/config/` + `cli/cmd/config.go` | — |
+
+### Data Flow
+
+```
+Host's localhost:PORT
+       ↕ (HTTP/WebSocket)
+  cli/internal/tunnel/proxy.go
+       ↕ (protobuf over libp2p streams)
+  cli/internal/p2p/ ←→ viewer/src/p2p/
+       ↕ (protobuf deserialization)
+  viewer/src/proxy/service-worker.ts
+       ↕ (fetch response / MessageChannel)
+  Tunneled content in browser
+```
+
+### Development Workflow Integration
+
+**Development Servers:**
+- CLI: `cd cli && go run . serve --port 8080`
+- Viewer: `cd viewer && npm run dev` (Vite HMR on localhost:5173)
+- Proto codegen: `buf generate` from project root (outputs to `cli/internal/proto/` and `viewer/src/proto/`)
+
+**Build Process:**
+- CLI: `cd cli && go build -o peertunnel .` (single static binary)
+- Viewer: `cd viewer && npm run build` (static files in `viewer/dist/`)
+- Proto: `buf generate` must run before either build if `.proto` files changed
+
+**Deployment:**
+- CLI binaries: GoReleaser attaches to GitHub Releases on tag push
+- Viewer: GitHub Actions builds and deploys `viewer/dist/` to GitHub Pages
+- Both triggered independently — viewer deploys on main branch push, CLI releases on version tags
