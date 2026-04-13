@@ -1,5 +1,5 @@
 ---
-stepsCompleted: [1, 2, 3, 4]
+stepsCompleted: [1, 2, 3, 4, 5]
 inputDocuments: ['prd.md', 'prd-validation-report.md', 'product-brief-p2p-tunnel.md']
 workflowType: 'architecture'
 project_name: 'peertunnel'
@@ -252,3 +252,119 @@ peertunnel/
 - Token format must match between CLI generation and viewer validation
 - Stream protocol IDs must be identical on both sides
 - Control message schema affects both CLI connection tracking and viewer reconnection UX
+
+## Implementation Patterns & Consistency Rules
+
+### Pattern Categories Defined
+
+**15 conflict points identified** where AI agents could make different implementation choices. Patterns below ensure all agents produce compatible, consistent code.
+
+### Naming Patterns
+
+**Go Package Naming (internal/):**
+- Use domain-oriented names: `tunnel`, `relay`, `p2p`, `config`
+- NOT library-oriented names (`libp2p`, `cobra`, `yaml`)
+- Package names are single lowercase words (Go convention)
+
+**TypeScript File Naming:**
+- Kebab-case for all files: `connection-status.ts`, `peer-connection.ts`
+- PascalCase for class/component names: `class ConnectionStatus`
+- Follows Lit community conventions
+
+**Lit Component Tag Naming:**
+- Prefix all custom elements with `pt-`: `<pt-connection-status>`, `<pt-welcome-page>`, `<pt-connection-log>`
+- Avoids collisions with tunneled content's custom elements
+- Short, recognizable namespace
+
+**Proto Message Naming:**
+- PascalCase messages: `HttpRequest`, `HttpResponse`, `ControlMessage`
+- snake_case fields: `request_url`, `status_code`, `header_entries`
+- Follows standard protobuf style guide
+
+**libp2p Protocol IDs:**
+- Format: `/peertunnel/<protocol>/<version>`
+- HTTP tunnel: `/peertunnel/http/1.0.0`
+- WebSocket tunnel: `/peertunnel/ws/1.0.0`
+- Control channel: `/peertunnel/control/1.0.0`
+- Versioned to allow future protocol changes without breaking compatibility
+
+### Structure Patterns
+
+**Test Location:**
+- Go: `*_test.go` co-located with source (Go standard)
+- TypeScript: `*.test.ts` co-located with source (e.g., `connection-status.test.ts` next to `connection-status.ts`)
+- Consistent co-location across both components
+
+**Proto File Location:**
+- `proto/` directory at project root — single source of truth
+- Both `cli/` and `viewer/` reference root `proto/` for codegen
+- Generated code placed in `cli/internal/proto/` and `viewer/src/proto/`
+- `.proto` files are the canonical definition; generated files are not committed
+
+### Format Patterns
+
+**CLI Log Output:**
+- User-facing format: `[HH:MM:SS] <event description> — <context>` (matches PRD examples)
+- Internal logging: Go `slog` package with structured fields
+- Terminal output is human-readable; structured logging available at Debug level
+
+**Control Message Types (Proto Enum):**
+- SCREAMING_SNAKE_CASE for proto enum values: `TUNNEL_CLOSED`, `VIEWER_CONNECTED`, `VIEWER_DISCONNECTED`, `RECONNECTING`
+- Standard protobuf enum convention
+
+**Error Messages Across P2P Boundary:**
+- Structured proto message: `ErrorMessage { ErrorCode code = 1; string detail = 2; }`
+- Error codes as proto enum: `TOKEN_INVALID`, `MAX_VIEWERS_REACHED`, `TUNNEL_SHUTTING_DOWN`, `INTERNAL_ERROR`
+- Both CLI and viewer handle all error codes explicitly — no generic catch-all
+
+### Communication Patterns
+
+**Viewer Connection State Machine:**
+- Defined states: `idle` → `connecting` → `connected` → `disconnected` → `reconnecting` → `error`
+- Transitions are explicit — no implicit state changes
+- All state transitions logged to connection log UI
+- State is a single `connectionState` reactive property on the root component
+
+### Process Patterns
+
+**Go Error Handling:**
+- Wrap errors with context: `fmt.Errorf("failed to start tunnel: %w", err)`
+- Sentinel errors for expected conditions: `var ErrMaxViewers = errors.New("maximum viewers reached")`
+- No panics in library code; panics only in `main()` for unrecoverable startup failures
+- All errors from libp2p operations are wrapped with peertunnel context before surfacing
+
+**TypeScript Error Handling:**
+- Custom error classes: `class ConnectionError extends Error`, `class AuthError extends Error`
+- Async errors caught and propagated to Lit component state (triggers UI update)
+- No silent error swallowing — all caught errors either update UI state or are re-thrown
+
+**Graceful Shutdown Sequence (CLI):**
+1. Receive SIGINT/SIGTERM
+2. Send `TUNNEL_SHUTTING_DOWN` control message to all connected viewers
+3. Wait up to 2 seconds for viewer acknowledgments
+4. Close all libp2p streams and host
+5. Print session summary (duration, total connections)
+6. Exit 0
+
+**Logging Levels:**
+- Go `slog`: `Debug` (libp2p internals, stream details), `Info` (connection events — user-visible), `Warn` (port validation, reconnection attempts), `Error` (failures)
+- TypeScript: `console.debug` / `console.info` / `console.warn` / `console.error` with same semantic mapping
+- Default CLI verbosity shows Info and above; `--verbose` flag enables Debug
+
+### Enforcement Guidelines
+
+**All AI Agents MUST:**
+- Follow Go naming conventions enforced by `gofmt` and `go vet` — no exceptions
+- Use `pt-` prefix for all Lit custom element tags
+- Use kebab-case for all TypeScript files
+- Reference proto definitions from root `proto/` directory — never duplicate message definitions
+- Use versioned protocol IDs for all libp2p streams
+- Wrap all Go errors with context before returning
+- Map all P2P errors to defined proto error codes — no raw string errors across the boundary
+
+**Anti-Patterns to Avoid:**
+- Creating utility/helper packages (`utils/`, `helpers/`) — put code where it belongs by domain
+- Using `any` type in TypeScript — all P2P messages are typed via proto-generated code
+- Catching errors without handling them (empty catch blocks)
+- Hardcoding libp2p multiaddrs outside of config — use constants or config values
+- Mixing human-readable log output with structured logging in the same output stream
